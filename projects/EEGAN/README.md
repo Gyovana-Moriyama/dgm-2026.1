@@ -1,6 +1,6 @@
-# `<Project Title in Portuguese>`
+# EEGAN - O modelo...
 
-# `<Project Title in English>`
+# EEGAN - The model...
 
 ## Presentation
 
