@@ -76,4 +76,15 @@ WEEK 8 to 11: final changes, writing of repository and results, prepare presenta
 
 > Point out in this section the bibliographic references adopted in the project.
 1. Scheck, K., Schultz, T. (2023) STE-GAN: Speech-to-Electromyography Signal Conversion using Generative Adversarial Networks. Proc. Interspeech 2023, 1174-1178, doi: 10.21437/Interspeech.2023-174
+
 2. Bhasin, Rohin & Bolarinwa, Anuoluwapo & Cai, Yujun & Danielson, Nathan & Han, Shangchen & Marshall, Jesse & Merel, Josh & Pnevmatikakis, Eftychios & Salter, Sasha & Schlager, Collin & Spurr, Adrian & Walkington, Peter & Wang, Robert & Warren, Richard. (2024). emg2pose: A Large and Diverse Benchmark for Surface Electromyographic Hand Pose Estimation. 55703-55728. 10.52202/079017-1770. 
+
+
+
+Etapa 1: Estudo sobre o problema, contexo, modelo, e avaliação preeliminar de datasets - 3 semanas
+- Um dataset por pessoa por semana (total 9 datasets)
+- Marcelo: Fala (TTS, Autosupervisionado)
+- Enzo: Detalhes sobre EMG (trabalhos relacionados, etc)
+- Daniel: Detalhes do modelo (STE-GAN, loss, etc)
+Etapa 2: Experimentações de escopo limitado: HuBERT, EMG Encoder, Avaliação Cross Dataset, aumentação para EMG encoder (Esperado que surjam ideias sobre mudanças no modelo) - 3 semanas (D2 ao final da 2a semana)
+Etapa 3: Definições de contribuições e treinamento e avaliação de modelos - 3 semanas (D3 ao final da 3a semana)
