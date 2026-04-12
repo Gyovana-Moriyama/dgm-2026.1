@@ -2,8 +2,11 @@
 
 # Explainable Counterfactual Generation for Pneumonia in Chest X-ray Images
 
+<<<<<<< HEAD
 ---
 
+=======
+>>>>>>> 8a5e9893 (Created project folder and organized it according to cookie cutter. Also added information on README file.)
 ## Presentation
 
 This project originated in the context of the graduate course _IA376N - Generative AI: from models to multimodal applications_,
@@ -15,8 +18,11 @@ offered in the first semester of 2026, at Unicamp, under the supervision of Prof
 | Gabriel Carvalho Freitas | 155421 | Statistics |
 | Gyovana Mayara Moriyama | 216190 | Computer Science |
 
+<<<<<<< HEAD
 ---
 
+=======
+>>>>>>> 8a5e9893 (Created project folder and organized it according to cookie cutter. Also added information on README file.)
 ## Project Summary Description
 
 Deep learning models for medical imaging are often limited by data scarcity and class imbalance, especially for pathological cases such as pneumonia in chest X-rays.
