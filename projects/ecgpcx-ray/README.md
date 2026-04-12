@@ -199,10 +199,13 @@ The project expects to produce:
 
 5. Qualitative analysis demonstrating alignment between generated changes and clinical patterns  
 
+---
+
 ## Schedule
 
 ![Schedule](images/schedule.png)
 
+---
 
 ## Bibliographic References
 
@@ -216,3 +219,9 @@ The project expects to produce:
 8. Zia, Tehseen, Zeeshan Nisar, and Shakeeb Murtaza. "Counterfactual Explanation and Instance-Generation using Cycle-Consistent Generative Adversarial Networks." arXiv preprint arXiv:2301.08939 (2023).
 9. Oakden-Rayner, L. Exploring the ChestXray14 dataset: problems. https://lukeoakdenrayner.wordpress.com/2017/12/18/the-chestxray14-dataset-problems/ (2017).
 10. Wang, X. et al. ChestX-ray8: Hospital-scale chest X-ray database and benchmarks on weakly-supervised classification and localization of common thorax diseases. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2097–2106, 10.1109/CVPR.2017.369 (2017).
+
+---
+
+## Presentation slides
+
+[E1 presentation](https://docs.google.com/presentation/d/1P2AmFucKLHWtAzc0i90CsPv40hV0R9bwpwrL2EjBf7s/edit?usp=sharing)
