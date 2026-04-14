@@ -21,7 +21,7 @@ To address the issues of data acquisition and aid in the development of robust S
 
 The generator outputs a C-channel EMG signal. Therefore, the output of the generative model will be multi-channel EMG signals of the exact same dimension as the target input data.
 
-[PRESENTATION LINK]()
+[PRESENTATION LINK](https://docs.google.com/presentation/d/1RQUPtrMktuhXLVYFDq8A5LLMe22JyeH8VmcdLbCdixM/edit?usp=sharing)
 
 ## Proposed Methodology
 
