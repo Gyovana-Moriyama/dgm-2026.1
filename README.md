@@ -1,7 +1,7 @@
 # dgm-2026.1
-# `<Project Title in Portuguese>`
+# `<Reconstrução 2D para 3D baseada em aprendizado profundo para análise de buracos em vias públicas>`
 
-# `<Project Title in English>`
+# `<Deep Learning-Based 2D to 3D Reconstruction for Pothole Analysis>`
 
 ## Presentation
 
@@ -12,7 +12,7 @@ offered in the first semester of 2026, at Unicamp, under the supervision of Prof
 > |Name | RA | Specialization|
 > |--|--|--|
 > | Adriel Bombonato | 291654 | Electrical Engineering|
-> | Name2 | 123456 | Electrical Engineering|
+> | Hasnat Hameed | 270284 | Electrical Engineering|
 > | Name3 | 123456 | XXX|
 
 ## Project Summary Description
