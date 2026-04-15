@@ -54,7 +54,4 @@ Phase 5 (Week 9) entails the "Final Review & Deliverable Preparation", where the
 4. [Breaking Semantic Artifacts for Generalized AI-generated Image Detection](https://proceedings.neurips.cc/paper_files/paper/2024/hash/6dddcff5b115b40c998a08fbd1cea4d7-Abstract-Conference.html).
 5. [From Black Boxes to Glass Boxes: Explainable AI for Trustworthy Deepfake Forensics](https://www.mdpi.com/2410-387X/9/4/61).
 6. [Frequency-Domain Masking and Spatial Interaction for Generalizable Deepfake Detection](https://www.mdpi.com/2079-9292/14/7/1302).
-<<<<<<< HEAD
 
-=======
->>>>>>> 5939ba8d (Initial README.md commit with project proposal)
