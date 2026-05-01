@@ -1,18 +1,19 @@
-ipython
-ipywidgets
-jupyterlab
-kagglehub
-matplotlib
-notebook
-numpy
-pandas
-pillow
-python-dotenv
-ruff
-scikit-learn
-seaborn
-torch
-torchaudio
-torchmetrics[image]
-torchvision
-tqdm
+name: ia376_env
+channels:
+  - defaults
+dependencies:
+  - ipython
+  - jupyterlab
+  - matplotlib
+  - notebook
+  - numpy
+  - pandas
+  - pip
+  - python-dotenv
+  - ruff
+  - scikit-learn
+  - pytorch
+  - pytorch-cuda=11.8
+  - torchaudio
+  - torchvision
+  - ipywidgets
