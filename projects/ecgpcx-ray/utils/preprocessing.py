@@ -94,6 +94,69 @@ class Preprocessing():
             print(f"Duplicated rows removed. New dataframe length: {df.shape[0]}")
         return df
     
+
+    def _normalize_age(self, df, method='minmax'):
+        """Normalize patient age values using specified method.
+        
+        Applies age normalization to create features suitable for machine learning
+        models. Supports Min-Max scaling (0-1 range) and standardization (z-score).
+        
+        Args:
+            df (pd.DataFrame): Input dataframe containing 'Patient Age' column.
+            method (str): Normalization method. Options are:
+                         'minmax': Min-Max scaling to [0, 1] range (default).
+                         'standard': Standardization (z-score normalization).
+                         
+        Returns:
+            pd.DataFrame: Dataframe with new 'Patient Age Normalized' column.
+        """
+        df_normalized = df.copy()
+        
+        if method == 'minmax':
+            # Min-Max scaling: (x - min) / (max - min)
+            min_age = df['Patient Age'].min()
+            max_age = df['Patient Age'].max()
+            df_normalized['Patient Age Normalized'] = (df['Patient Age'] - min_age) / (max_age - min_age)
+            print(f"Age normalized using Min-Max scaling. Range: [{min_age}, {max_age}] -> [0, 1]")
+            
+        elif method == 'standard':
+            # Standardization (z-score): (x - mean) / std
+            mean_age = df['Patient Age'].mean()
+            std_age = df['Patient Age'].std()
+            df_normalized['Patient Age Normalized'] = (df['Patient Age'] - mean_age) / std_age
+            print(f"Age normalized using standardization. Mean: {mean_age:.2f}, Std: {std_age:.2f}")
+            
+        else:
+            raise ValueError(f"Unknown normalization method: {method}. Choose 'minmax' or 'standard'.")
+        
+        return df_normalized
+
+    def _encode_gender(self, df, encoding_map=None):
+        """Encode categorical gender values to numeric format.
+        
+        Converts gender values ('M', 'F') to numeric values suitable for
+        machine learning models. Default: M=1, F=0.
+        
+        Args:
+            df (pd.DataFrame): Input dataframe containing 'Patient Gender' column.
+            encoding_map (dict, optional): Custom mapping for gender values.
+                                          Format: {'M': 1, 'F': 0}.
+                                          If None, uses default mapping.
+                                          
+        Returns:
+            pd.DataFrame: Dataframe with new 'Patient Gender Encoded' column.
+        """
+        df_encoded = df.copy()
+        
+        # Use default mapping if not provided
+        if encoding_map is None:
+            encoding_map = {'M': 1, 'F': 0}
+        
+        # Apply encoding
+        df_encoded['Patient Gender Encoded'] = df['Patient Gender'].map(encoding_map)
+        
+        return df_encoded
+    
     def _get_pneumonia_patients(self):
         """Filter, clean, and store pneumonia patient records.
         
@@ -106,6 +169,11 @@ class Preprocessing():
         # Apply data cleaning steps
         pneumonia_only_df = self._remove_duplicates(pneumonia_only_df)
         pneumonia_only_df = self._outlier_removal(pneumonia_only_df)
+
+        #Normalize Age
+        pneumonia_only_df = self._normalize_age(pneumonia_only_df, method='minmax')
+        #Encode Gender
+        pneumonia_only_df = self._encode_gender(pneumonia_only_df, encoding_map={'M': 1, 'F': 0})
         
         # Store cleaned dataframe
         self.pneumonia = pneumonia_only_df.copy()
@@ -123,6 +191,11 @@ class Preprocessing():
         healthy_df = self._remove_duplicates(healthy_df)
         healthy_df = self._outlier_removal(healthy_df)
         
+        # Normalize Age
+        healthy_df = self._normalize_age(healthy_df, method='minmax')
+        # Encode Gender
+        healthy_df = self._encode_gender(healthy_df, encoding_map={'M': 1, 'F': 0})
+
         # Store cleaned dataframe
         self.healthy = healthy_df.copy()
 
@@ -223,6 +296,7 @@ class Preprocessing():
         """
         return self.healthy.copy()
 
+
 if __name__ == '__main__':
     """Example usage of the Preprocessing class."""
     
@@ -237,5 +311,6 @@ if __name__ == '__main__':
     healthy_df = preprocessing.get_healthy_dataframe()
     
     # Print summary statistics
+    print('\n--- Summary Statistics ---')
     print('Number of pneumonia images: ', len(all_pneumonia_images))
     print('Number of healthy images: ', len(all_healthy_images))
