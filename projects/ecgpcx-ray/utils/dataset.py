@@ -34,10 +34,14 @@ class PyTorchDataset(Dataset):
         """
         self.images = images
         self.labels = labels
+<<<<<<< HEAD
         # Ensure metadata is a float tensor
         self.metadata = metadata.float()
         if self.metadata.dim() == 1:
             self.metadata = self.metadata.unsqueeze(1)
+=======
+        self.metadata = metadata
+>>>>>>> 78acb3e8 (Added method to split the dataset. Also added method to create a PyTorch dataset for CVAE DataLoader)
         
         # Validate that all components have the same length
         assert len(self.images) == len(self.labels), \
@@ -63,9 +67,12 @@ class PyTorchDataset(Dataset):
         """
         # Load and convert PIL image to tensor
         img = self.images[idx]
+<<<<<<< HEAD
         # Convert to grayscale to ensure consistent single channel
         if img.mode != 'L':
             img = img.convert('L')
+=======
+>>>>>>> 78acb3e8 (Added method to split the dataset. Also added method to create a PyTorch dataset for CVAE DataLoader)
         img_array = np.array(img, dtype=np.float32) / 255.0  # Normalize to [0, 1]
         img_tensor = torch.from_numpy(img_array).unsqueeze(0)  # Add channel dimension
         
