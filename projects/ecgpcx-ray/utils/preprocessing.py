@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from torch.utils.data import DataLoader
-from dataset import PyTorchDataset
+from .dataset import PyTorchDataset
 
 class Preprocessing():
     """Handle preprocessing of NIH Chest X-rays dataset.

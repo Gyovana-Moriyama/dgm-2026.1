@@ -60,6 +60,9 @@ class PyTorchDataset(Dataset):
         """
         # Load and convert PIL image to tensor
         img = self.images[idx]
+        # Convert to grayscale to ensure consistent single channel
+        if img.mode != 'L':
+            img = img.convert('L')
         img_array = np.array(img, dtype=np.float32) / 255.0  # Normalize to [0, 1]
         img_tensor = torch.from_numpy(img_array).unsqueeze(0)  # Add channel dimension
         
