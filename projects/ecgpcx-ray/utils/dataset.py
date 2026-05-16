@@ -59,7 +59,7 @@ class PyTorchDataset(Dataset):
                    - metadata_tensor: torch.Tensor with shape (2,) - [age, gender]
         """
         # Load and convert PIL image to tensor
-        img = self.images[idx]
+        img = self.images[idx].convert('L')  # Force single-channel grayscale
         img_array = np.array(img, dtype=np.float32) / 255.0  # Normalize to [0, 1]
         img_tensor = torch.from_numpy(img_array).unsqueeze(0)  # Add channel dimension
         
