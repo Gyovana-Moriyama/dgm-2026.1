@@ -203,7 +203,7 @@ class Preprocessing():
             raise ValueError(f"Labels must be in [0, {num_classes - 1}], got {labels_arr.min()} to {labels_arr.max()}")
         return torch.from_numpy(np.eye(num_classes)[labels_arr]).float()
     
-    def _get_pneumonia_patients(self, verbose=True):
+    def _get_pneumonia_patients(self, verbose=True, method='minmax'):
         """Filter, clean, and store pneumonia patient records.
         
         Filters metadata for records matching the specified finding label,
@@ -220,7 +220,7 @@ class Preprocessing():
         pneumonia_only_df = self._outlier_removal(pneumonia_only_df, verbose)
 
         #Normalize Age
-        pneumonia_only_df = self._normalize_age(pneumonia_only_df, method='minmax', verbose=verbose)
+        pneumonia_only_df = self._normalize_age(pneumonia_only_df, method=method, verbose=verbose)
         #Encode Gender
         pneumonia_only_df = self._encode_gender(pneumonia_only_df, encoding_map={'M': 1, 'F': 0})
 
@@ -230,7 +230,7 @@ class Preprocessing():
         # Store cleaned dataframe
         self.pneumonia = pneumonia_only_df.copy()
 
-    def _get_healthy_patients(self, verbose=True):
+    def _get_healthy_patients(self, verbose=True, method='minmax'):
         """Filter, clean, and store healthy patient records.
         
         Filters metadata for records with 'No Finding' label (healthy controls),
@@ -247,7 +247,7 @@ class Preprocessing():
         healthy_df = self._outlier_removal(healthy_df, verbose)
 
         # Normalize Age
-        healthy_df = self._normalize_age(healthy_df, method='minmax', verbose=verbose)
+        healthy_df = self._normalize_age(healthy_df, method=method, verbose=verbose)
         # Encode Gender
         healthy_df = self._encode_gender(healthy_df, encoding_map={'M': 1, 'F': 0})
 
@@ -313,7 +313,7 @@ class Preprocessing():
 
         return all_images
     
-    def _load_images(self, size, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, seed=42, verbose=True):
+    def _load_images(self, size, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, seed=42, verbose=True, method='minmax'):
         """Main pipeline to load and preprocess all images and metadata.
         
         Orchestrates the complete preprocessing workflow:
@@ -338,7 +338,8 @@ class Preprocessing():
             train_ratio=train_ratio,
             val_ratio=val_ratio,
             test_ratio=test_ratio,
-            seed=seed  # Fixed seed for reproducibility
+            seed=seed,  # Fixed seed for reproducibility,
+            method=method
         )
 
         #Load images for train, test and validation sets
@@ -352,7 +353,7 @@ class Preprocessing():
 
         return train_images, val_images, test_images, split_results
 
-    def create_cvae_dataset(self, img_size=(128, 128), train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, seed=42, verbose=True):
+    def create_cvae_dataset(self, img_size=(128, 128), train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, seed=42, verbose=True, method='minmax'):
         """Create a PyTorch Dataset suitable for CVAE model training with DataLoader.
         
         Combines pneumonia and healthy data, normalizes age, encodes gender,
@@ -379,7 +380,7 @@ class Preprocessing():
         # Load and preprocess data
         if verbose:
             print("Loading images...")
-        train_images, val_images, test_images, split_results = self._load_images(size=img_size, train_ratio=train_ratio, val_ratio=val_ratio, test_ratio=test_ratio, seed=seed, verbose=verbose)
+        train_images, val_images, test_images, split_results = self._load_images(size=img_size, train_ratio=train_ratio, val_ratio=val_ratio, test_ratio=test_ratio, seed=seed, verbose=verbose, method=method)
         
         # Get dataframes with preprocessed data
         train_df = split_results['train_df']
@@ -433,7 +434,7 @@ class Preprocessing():
         """
         return self.healthy.copy()
 
-    def split_by_patient(self, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, seed=42, verbose=True):
+    def split_by_patient(self, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15, seed=42, verbose=True, method='minmax'):
         """Create patient-level train/validation/test splits ensuring reproducibility.
         
         Performs stratified patient-level splitting so that all images from the same
@@ -463,7 +464,7 @@ class Preprocessing():
         
         # Load and prepare data
         self._load_dataframe()
-        self._get_pneumonia_patients(verbose=verbose)
+        self._get_pneumonia_patients(verbose=verbose, method=method)
         self._get_healthy_patients(verbose=verbose)
         
         # Combine pneumonia and healthy dataframes

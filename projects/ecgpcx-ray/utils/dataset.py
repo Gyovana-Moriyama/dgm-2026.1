@@ -34,7 +34,10 @@ class PyTorchDataset(Dataset):
         """
         self.images = images
         self.labels = labels
-        self.metadata = metadata
+        # Ensure metadata is a float tensor
+        self.metadata = metadata.float()
+        if self.metadata.dim() == 1:
+            self.metadata = self.metadata.unsqueeze(1)
         
         # Validate that all components have the same length
         assert len(self.images) == len(self.labels), \

@@ -28,32 +28,42 @@ def set_seed(seed=42):
 set_seed(42)
 
 class CVAE(nn.Module):
-    def __init__(self, img_channels=1, img_size=128, latent_dim=64, num_classes=2, metadata_dim=0):
+    def __init__(self, img_channels=1, img_size=128, latent_dim=64, num_classes=2, metadata_dim=2, gender_embedding_dim=4):
         super().__init__()
 
         self.latent_dim = latent_dim
         self.num_classes = num_classes
         self.metadata_dim = metadata_dim
+        self.gender_embedding_dim = gender_embedding_dim
 
         input_dim = img_channels * img_size * img_size
-        cond_dim = num_classes + metadata_dim
+        cond_dim = num_classes + (metadata_dim - 1) + gender_embedding_dim
 
         #Encoder
-        self.fc1 = nn.Linear(input_dim + cond_dim, 512)
-        self.fc21 = nn.Linear(512, latent_dim)
-        self.fc22 = nn.Linear(512, latent_dim)
+        self.fc1 = nn.Linear(input_dim + cond_dim, 1024)
+        self.fc21 = nn.Linear(1024, latent_dim)
+        self.fc22 = nn.Linear(1024, latent_dim)
 
         #Decoder
-        self.fc3 = nn.Linear(latent_dim + cond_dim, 512)
-        self.fc4 = nn.Linear(512, input_dim)
+        self.fc3 = nn.Linear(latent_dim + cond_dim, 1024)
+        self.fc4 = nn.Linear(1024, input_dim)
 
+        self.gender_embedding = nn.Embedding(2, gender_embedding_dim)
         self.elu = nn.ELU()
         self.sigmoid = nn.Sigmoid()
 
+    def _prepare_metadata(self, m):
+        if m is None:
+            return None
+        age = m[:, [0]]
+        gender_idx = m[:, 1].long().clamp(0, self.gender_embedding.num_embeddings - 1)
+        gender_emb = self.gender_embedding(gender_idx)
+        return torch.cat([age, gender_emb], dim=1)
 
     def encode(self, x, y, m=None):
         inputs = torch.cat([x, y], dim=1)
         if m is not None:
+            m = self._prepare_metadata(m)
             inputs = torch.cat([inputs, m], dim=1)
         h1 = self.elu(self.fc1(inputs))
         mu = self.fc21(h1)  
@@ -68,6 +78,7 @@ class CVAE(nn.Module):
     def decode(self, z, y, m=None):
         cond = [y]
         if m is not None:
+            m = self._prepare_metadata(m)
             cond.append(m)
 
         cond = torch.cat(cond, dim=1)
@@ -86,14 +97,23 @@ class CVAE(nn.Module):
 
 
 def vae_loss(x, x_hat, mu, logvar, beta=1.0):
-    BCE = F.binary_cross_entropy(x_hat, x.view(x.size(0), -1), reduction='sum')
+    x_flat = x.view(x.size(0), -1)
+    x_hat_flat = x_hat.view(x.size(0), -1)
+    reconstruction_loss = 0.5 * F.mse_loss(x_hat_flat, x_flat, reduction='mean') \
+                    + 0.5 * F.l1_loss(x_hat_flat, x_flat, reduction='mean')
+    # Normalize KLD by the batch size so it is on the same scale as the reconstruction loss.
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return BCE + beta * KLD
+    KLD = KLD / x_flat.size(0)
+    weighted_kld = beta * KLD
+    return reconstruction_loss + weighted_kld, reconstruction_loss, KLD, weighted_kld, beta
 
 
 def evaluate(model, evaluate_loader, device, epoch, beta=1.0, results_dir="../training-results/cvae/results"):
     model.eval()
     total_loss = 0
+    total_rec_loss = 0
+    total_kld = 0
+    total_weighted_kld = 0
     with torch.no_grad():
         for i, batch in enumerate(evaluate_loader):
             x, y, m = batch
@@ -102,8 +122,11 @@ def evaluate(model, evaluate_loader, device, epoch, beta=1.0, results_dir="../tr
             m = m.to(device) if m is not None else None
             
             x_hat, mu, logvar = model(x, y, m)
-            loss = vae_loss(x, x_hat, mu, logvar, beta=beta)
-            total_loss += loss.item()
+            loss, rec_loss, kld, weighted_kld, beta = vae_loss(x, x_hat, mu, logvar, beta=beta)
+            total_loss += loss.item() * x.size(0)
+            total_rec_loss += rec_loss.item() * x.size(0)
+            total_kld += kld.item() * x.size(0)
+            total_weighted_kld += weighted_kld.item() * x.size(0)
 
             if i == 0:
                 n = min(x.size(0), 8)
@@ -111,6 +134,10 @@ def evaluate(model, evaluate_loader, device, epoch, beta=1.0, results_dir="../tr
                 save_image(comparison.cpu(), f'{results_dir}/reconstruction_{epoch}.png', nrow=n)
 
     avg_loss = total_loss / len(evaluate_loader.dataset)
+    avg_rec_loss = total_rec_loss / len(evaluate_loader.dataset)
+    avg_kld = total_kld / len(evaluate_loader.dataset)
+    avg_weighted_kld = total_weighted_kld / len(evaluate_loader.dataset)
+    tqdm.write('Validation set loss (epoch {:03d}): total={:.3f}, rec={:.3f}, kld={:.3f}, weighted_kld={:.3f}'.format(epoch, avg_loss, avg_rec_loss, avg_kld, avg_weighted_kld))
     return avg_loss
 
 
@@ -118,7 +145,10 @@ def train(model, train_loader, val_loader, optimizer, device, epoch, beta=1.0):
     """Train the CVAE model for a single epoch."""
     model.train()
     total_loss = 0
-   
+    total_rec_loss = 0
+    total_kld = 0
+    total_weighted_kld = 0
+
     # Initialize tqdm (shows the progress during training)
     progress_bar = tqdm(train_loader, desc='Epoch {:03d}'.format(epoch), leave=False, disable=False)
 
@@ -132,26 +162,31 @@ def train(model, train_loader, val_loader, optimizer, device, epoch, beta=1.0):
         x_hat, mu, logvar = model(x, y, m)
         
         # Compute loss
-        loss = vae_loss(x, x_hat, mu, logvar, beta=beta)
+        loss, rec_loss, kld, weighted_kld, beta = vae_loss(x, x_hat, mu, logvar, beta=beta)
         
         # Backward pass
         loss.backward()
         
         # Track loss
-        total_loss += loss.item()
+        total_loss += loss.item() * x.size(0)
+        total_rec_loss += rec_loss.item() * x.size(0)
+        total_kld += kld.item() * x.size(0)
+        total_weighted_kld += weighted_kld.item() * x.size(0)
         
         #Update model parameters
         optimizer.step()
         
         # Update the progress bar with the current batch's loss
-        progress_bar.set_postfix({'training_loss': '{:.3f}'.format(loss.item() / x.size(0))})
+        progress_bar.set_postfix({'training_loss': '{:.3f}'.format(loss.item()), 'beta': '{:.3f}'.format(beta)})
     
     avg_loss = total_loss / len(train_loader.dataset)
-    tqdm.write('Training set loss (average, epoch {:03d}): {:.3f}'.format(epoch, avg_loss))
+    avg_rec_loss = total_rec_loss / len(train_loader.dataset)
+    avg_kld = total_kld / len(train_loader.dataset)
+    avg_weighted_kld = total_weighted_kld / len(train_loader.dataset)
+    tqdm.write('Training set loss (epoch {:03d}): total={:.3f}, rec={:.3f}, kld={:.3f}, weighted_kld={:.3f}'.format(epoch, avg_loss, avg_rec_loss, avg_kld, avg_weighted_kld))
 
     #Evaluate on validation set after each epoch
     val_loss = evaluate(model, val_loader, device, epoch, beta=beta)
-    tqdm.write('Validation set loss (average, epoch {:03d}): {:.3f}'.format(epoch, val_loss))
     return avg_loss, val_loss
 
 
@@ -169,7 +204,6 @@ def save_checkpoint(model, optimizer, epoch, train_loss, val_loss, checkpoint_di
     print(f"Checkpoint saved: {checkpoint_path}")
     return checkpoint_path
 
-
 def load_checkpoint(model, optimizer, checkpoint_path):
     """Load model checkpoint."""
     if not os.path.exists(checkpoint_path):
@@ -182,7 +216,6 @@ def load_checkpoint(model, optimizer, checkpoint_path):
     epoch = checkpoint['epoch']
     print(f"Checkpoint loaded from epoch {epoch}: {checkpoint_path}")
     return epoch
-
 
 def get_latest_checkpoint(checkpoint_dir="../training-results/cvae/models"):
     """Get the latest checkpoint path."""
@@ -197,6 +230,9 @@ def get_latest_checkpoint(checkpoint_dir="../training-results/cvae/models"):
     latest = checkpoints[-1]
     return os.path.join(checkpoint_dir, latest)
 
+def beta_schedule(epoch, total_epochs, max_beta=1.0):
+    # Ramp beta from a small positive value up to max_beta over the first half of training.
+    return max_beta * min(1.0, (epoch + 1) / (total_epochs * 0.5))
 
 def train_loop(model, train_loader, val_loader, optimizer, device, epochs=10, beta=1.0, checkpoint_dir="../training-results/cvae/models", resume=True):
     """Train the CVAE model for multiple epochs."""
@@ -211,9 +247,13 @@ def train_loop(model, train_loader, val_loader, optimizer, device, epochs=10, be
             start_epoch = load_checkpoint(model, optimizer, latest_checkpoint) + 1
     
     for epoch in range(start_epoch, epochs):
+        # beta = beta_schedule(epoch, epochs, max_beta=beta)
         avg_loss, val_loss = train(model, train_loader, val_loader, optimizer, device, epoch, beta=beta)
         train_losses.append(avg_loss)
         val_losses.append(val_loss)
+
+        # current_lr = optimizer.param_groups[0]['lr']
+        # tqdm.write(f'Learning rate after epoch {epoch}: {current_lr:.6f}')
         
         # Save checkpoint after each epoch
         if epoch % 10 == 0 or epoch == epochs - 1:  # Save every 10 epochs and the last epoch
@@ -227,18 +267,46 @@ def train_loop(model, train_loader, val_loader, optimizer, device, epochs=10, be
     return train_losses, val_losses
     
 
-def generate_counterfactual(model, x, y_source, y_target, m=None):
-    """Generate counterfactual examples by optimizing in the latent space."""
+# def generate_counterfactual(model, x, y_source, y_target, m=None):
+#     """Generate counterfactual examples by optimizing in the latent space."""
+#     model.eval()
+#     with torch.no_grad():
+#         x_flat = x.view(x.size(0), -1)
+#         mu, logvar = model.encode(x_flat, y_source, m)
+#         z = model.reparameterize(mu, logvar)
+
+#         # Decode with target label
+#         x_cf = model.decode(z, y_target, m)
+#         return x_cf.view(x.size())  # Reshape to original image dimensions
+
+def generate_counterfactual(model, x, y_source, y_target, m=None,
+                            num_steps=50, lr=1e-2, lambda_sim=10.0, lambda_z=0.1):
     model.eval()
+
     with torch.no_grad():
         x_flat = x.view(x.size(0), -1)
         mu, logvar = model.encode(x_flat, y_source, m)
-        z = model.reparameterize(mu, logvar)
+        z_init = model.reparameterize(mu, logvar)
 
-        # Decode with target label
+    z = z_init.detach().clone().requires_grad_(True)
+    optimizer = torch.optim.Adam([z], lr=lr)
+    # Flatten target image to match decoder output shape ([B, input_dim])
+    x_target = x.view(x.size(0), -1)
+
+    for _ in range(num_steps):
         x_cf = model.decode(z, y_target, m)
-        return x_cf.view(x.size())  # Reshape to original image dimensions
+        # Use per-sample mean losses for stable gradients during latent optimization
+        recon_loss = F.mse_loss(x_cf, x_target, reduction='mean')
+        z_reg = F.mse_loss(z, mu, reduction='mean')
+        # Keeps the counterfactual close to the original image in latent space, preventing unrealistic changes
+        loss = lambda_sim * recon_loss + lambda_z * z_reg
 
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+    # After optimization, decode the final counterfactual
+    x_cf = model.decode(z, y_target, m)
+    return x_cf.view(x.size())
 
 def save_counterfactuals_individual(x_original, x_counterfactual, start_idx=0, 
                                     original_dir="../training-results/cvae/results/original/",
@@ -329,12 +397,13 @@ if __name__ == "__main__":
         metadata_dim=2  # age + gender
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     # Create CVAE-compatible dataset
     train_dataset, test_dataset, val_dataset = preprocessing.create_cvae_dataset(
         img_size=(128, 128),
-        verbose=True
+        verbose=True, 
+        method='standard'
     )
     
     # Create DataLoaders
@@ -342,7 +411,7 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
 
-    train_loop(model, train_loader, val_loader, optimizer, device, epochs=200)
+    train_loop(model, train_loader, val_loader, optimizer, device, epochs=200, beta=0.01)
 
     # Generate counterfactuals for all test samples
     print("\nGenerating counterfactuals for all test samples...")
