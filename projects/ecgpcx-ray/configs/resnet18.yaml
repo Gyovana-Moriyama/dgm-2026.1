@@ -1,0 +1,19 @@
+experiment_name: resnet18
+
+model:
+  name: FrozenResNet18
+  dropout: null
+
+data:
+  img_size: [128, 128]
+  augmentation: false
+  class_balancing: pos_weight  # weighted_random_sampler | pos_weight | none
+
+training:
+  batch_size: 32
+  lr: 3.0e-4
+  num_epochs: 20
+  weight_decay: 1.0e-4
+  early_stopping_patience: 10
+
+seed: 42
