@@ -9,10 +9,10 @@ import json
 from sklearn.metrics import roc_auc_score
 
 
-def run_epoch(loader, model, criterion, optimizer=None, device='cpu'):
+def run_epoch(loader, model, criterion, optimizer=None, device="cpu"):
     """
     Run one epoch. If optimizer is None, runs in eval mode.
-    
+
     Args:
         loader: DataLoader for the epoch.
         model: The model to train/evaluate.
@@ -35,10 +35,10 @@ def run_epoch(loader, model, criterion, optimizer=None, device='cpu'):
     ctx = torch.enable_grad() if training else torch.no_grad()
     with ctx:
         for images, labels, _ in loader:
-            images = images.to(device)                        # (B, 1, H, W)
+            images = images.to(device)  # (B, 1, H, W)
             y = labels[:, 1].unsqueeze(1).float().to(device)  # pneumonia score
 
-            logits = model(images)                            # (B, 1)
+            logits = model(images)  # (B, 1)
             loss = criterion(logits, y)
 
             if training:
@@ -55,20 +55,20 @@ def run_epoch(loader, model, criterion, optimizer=None, device='cpu'):
 
 
 def train_model(
-        model, 
-        train_loader, 
-        val_loader, 
-        criterion, 
-        optimizer, 
-        scheduler=None, 
-        device='cpu', 
-        num_epochs=20, 
-        CHECKPOINT_PATH=None, 
-        early_stopping_patience=10,
-    ):
+    model,
+    train_loader,
+    val_loader,
+    criterion,
+    optimizer,
+    scheduler=None,
+    device="cpu",
+    num_epochs=20,
+    CHECKPOINT_PATH=None,
+    early_stopping_patience=10,
+):
     """
     Train the model and evaluate on validation set after each epoch.
-    
+
     Args:
         model: The model to train.
         train_loader: DataLoader for training data.
@@ -85,23 +85,24 @@ def train_model(
         history: Dictionary containing training and validation loss and AUC history.
     """
     best_val_auc = 0.0
-    last_val_auc = 0.0
-    history = {"train_loss": [],"train_auc": [], "val_loss": [], "val_auc": []}
+    history = {"train_loss": [], "train_auc": [], "val_loss": [], "val_auc": []}
     epochs_without_improvement = 0
 
     pbar = tqdm(range(1, num_epochs + 1), desc="Training", unit="epoch")
     for epoch in pbar:
         start_time = time.time()
-        train_loss, train_y, train_sc = run_epoch(train_loader, model, criterion, optimizer, device=device)
-        val_loss, val_y, val_sc   = run_epoch(val_loader, model, criterion, device=device)
+        train_loss, train_y, train_sc = run_epoch(
+            train_loader, model, criterion, optimizer, device=device
+        )
+        val_loss, val_y, val_sc = run_epoch(val_loader, model, criterion, device=device)
 
         # Compute AUC
         train_auc = roc_auc_score(train_y, train_sc)
         val_auc = roc_auc_score(val_y, val_sc)
-        
+
         # Check if scheduler is provided and step with validation AUC
         if scheduler is not None:
-            scheduler.step(val_auc) 
+            scheduler.step(val_auc)
 
         history["train_loss"].append(train_loss)
         history["train_auc"].append(train_auc)
@@ -115,32 +116,28 @@ def train_model(
             if CHECKPOINT_PATH is not None:
                 torch.save(model.state_dict(), CHECKPOINT_PATH)
         else:
+            epochs_without_improvement += 1
             flag = ""
 
-        if val_auc < last_val_auc:
-            epochs_without_improvement += 1
-        else:
-            epochs_without_improvement = 0
-
+        elapsed_time = time.time() - start_time
+        print(
+            f"Epoch {epoch:02d}/{num_epochs} "
+            f"| elapsed_time={elapsed_time:.2f}s"
+            f"| train_loss={train_loss:.4f} "
+            f"| train_auc={train_auc:.4f} "
+            f"| val_loss={val_loss:.4f} "
+            f"| val_auc={val_auc:.4f}{flag} "
+        )
+        
         if epochs_without_improvement >= early_stopping_patience:
             print(f"Early stopping triggered after {epoch} epochs.")
             break
-        
-        last_val_auc = val_auc
-        elapsed_time = time.time() - start_time
-        print(f"Epoch {epoch:02d}/{num_epochs} "
-              f"| elapsed_time={elapsed_time:.2f}s"
-              f"| train_loss={train_loss:.4f} "
-              f"| train_auc={train_auc:.4f} "
-              f"| val_loss={val_loss:.4f} "
-              f"| val_auc={val_auc:.4f}{flag} "
-              )
 
     print(f"\nBest val AUC: {best_val_auc:.4f}")
     return best_val_auc, history
 
 
-def training_curves(history):
+def training_curves(history, results_path=None):
     """Plot training and validation loss and AUC curves."""
 
     epochs = range(1, len(history["train_loss"]) + 1)
@@ -165,24 +162,28 @@ def training_curves(history):
     plt.tight_layout()
     plt.show()
 
+    if results_path is not None:
+        plt.savefig(results_path)
+
 
 def save_results(
-        model="",
-        img_size=(224, 224),
-        epochs=20,
-        batch_size=32,
-        lr=1e-3,
-        dropout=0.5,
-        seed=42,
-        pos_weight=1.0,
-        best_val_auc=0.0,
-        test_accuracy=0.0,
-        test_auc_roc=0.0,
-        history=None,
-        results_path=None,
+    model="",
+    img_size=(224, 224),
+    epochs=20,
+    batch_size=32,
+    lr=1e-3,
+    dropout=0.5,
+    seed=42,
+    pos_weight=1.0,
+    augmentation=None,
+    best_val_auc=0.0,
+    test_accuracy=0.0,
+    test_auc_roc=0.0,
+    history=None,
+    results_path=None,
 ):
     """Save training history to a .npz file."""
-    
+
     results = {
         "model": model,
         "img_size": list(img_size),
@@ -192,9 +193,10 @@ def save_results(
         "dropout": dropout,
         "seed": seed,
         "pos_weight": round(pos_weight.item(), 4) if isinstance(pos_weight, torch.Tensor) else round(float(pos_weight), 4),
+        "augmentation": augmentation,
         "best_val_auc": round(best_val_auc, 4),
         "test_accuracy": round(test_accuracy, 4),
-        "test_auc_roc":  round(test_auc_roc, 4),
+        "test_auc_roc": round(test_auc_roc, 4),
         "history": history,
     }
 
@@ -202,4 +204,4 @@ def save_results(
         json.dump(results, f, indent=2)
 
     print(f"Results saved to {results_path}")
-    print(json.dumps({k: v for k, v in results.items() if k != 'history'}, indent=2))
+    print(json.dumps({k: v for k, v in results.items() if k != "history"}, indent=2))
