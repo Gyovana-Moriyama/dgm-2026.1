@@ -1,8 +1,8 @@
-experiment_name: resnet18
+experiment_name: densenet121
 
 model:
-  name: FrozenResNet18
-  dropout: null
+  name: FrozenDenseNet121
+  dropout: null  # head is a single Linear, no dropout
 
 data:
   img_size: [224, 224]
@@ -17,7 +17,7 @@ data:
 training:
   batch_size: 32
   lr: 3.0e-4
-  num_epochs: 20
+  num_epochs: 100
   weight_decay: 1.0e-4
   early_stopping_patience: 10
 
