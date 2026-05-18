@@ -15,6 +15,7 @@ offered in the **first semester of 2026 (2026.1)**, at Unicamp, under the superv
 
 ## Abstract
 > Summary of the objective, methodology **and results** obtained. In submission **D2**, it is acceptable to report partial results. Suggested maximum of 100 words.
+
 > Falar da baseline e CycleGAN
 
 This project investigates counterfactual generation for pneumonia in chest X-ray images as a tool for data augmentation and explainability. Using the NIH Chest X-ray dataset, we selected healthy images and images annotated only with pneumonia, cleaned metadata, resized images to 128 x 128 pixels, and built patient-level train/validation/test splits. A Conditional Variational Autoencoder (CVAE) and a Cycle-Consistent GAN (CycleGAN) conditioned on disease label, age, and gender were implemented in PyTorch. Partial results include the preprocessing pipeline, exploratory data analysis, trained CVAE and CycleGAN checkpoints, and reconstruction outputs. Current limitations are class imbalance, blurry reconstructions, and the need for quantitative classification and explainability evaluation.
@@ -197,7 +198,7 @@ Two CVAE variants exist in the repository:
 - `models/cvae.py`: fully connected CVAE baseline.
 - `models/cvae_cnn.py`: convolutional CVAE with convolutional encoder and transposed-convolution decoder.
 
-The CNN-based CVAE uses four convolutional blocks in the encoder and four transposed-convolution blocks in the decoder. The latent dimension is 64, the image input has one channel, and metadata conditioning includes normalized age plus a learned gender embedding.
+The CNN-based CVAE uses four convolutional blocks in the encoder and four transposed-convolution blocks in the decoder. The latent dimension is 64, the image input has one channel, and metadata conditioning includes normalized age and a learned gender embedding.
 
 **Advantages**
 
@@ -208,7 +209,7 @@ The CNN-based CVAE uses four convolutional blocks in the encoder and four transp
 
 **Current limitations**
 
-- Reconstructions may be blurry, which is common in VAE-based models.
+- Reconstructions are still blurry, which is common in VAE-based models.
 - The strong class imbalance can bias generated images toward healthy-looking reconstructions.
 - The generated counterfactuals still require quantitative and explainability evaluation.
 
@@ -289,8 +290,8 @@ The evaluation will consider three aspects:
 - ROC-AUC  
 
 #### 6.2 Image Generation Quality:
-- SSIM (Structural Similarity Index)  
-- FID (Fréchet Inception Distance)
+- SSIM (Structural Similarity Index): SSIM evaluates structural similarity between original and counterfactual images, measuring whether anatomical consistency is preserved during transformation.  (high is better)
+- FID (Fréchet Inception Distance): FID evaluates the realism of generated images by measuring the distance between the feature distributions of real and synthetic samples, indicating how closely the generated pneumonia images resemble real chest X-rays. (low is better)
 
 #### 6.3 Explainability:
 - Visual inspection of counterfactual differences  
@@ -304,21 +305,19 @@ The evaluation will consider three aspects:
 > Use a tool that allows you to design the workflow and save it as an image (e.g., Draw.io). Insert the image in this section.  
 > Remember that the goal of drawing the workflow is to help anyone who wishes to reproduce your experiments.
 
-The current experimental workflow is:
-
-1. Preprocess images and metadata
-2. Baseline
-3. CVAE
-    - Train a conditional generative model.
-    - Save reconstruction examples and checkpoints.
-    - Generate counterfactual images by changing the condition label.
-    - Compare original and generated images through visual inspection and planned difference maps.
-    - Train and evaluate a downstream classifier with and without generated images.
-4. CycleGAN
-
 The preprocessing workflow used to reproduce the current experiments is shown below.
 
 ![Preprocessing workflow](images/preprocessing.png)
+
+The current experimental workflow is:
+
+![Workflow](images/worklow.png)
+
+1. Preprocess images and metadata dataset
+2. Compute baseline metrics using a classification model.
+3. Implement and train two generative models, CVAE and CycleGAN to generate the counterfactuals.
+4. Compute the metrics using the same classifier used in the baseline.
+5. Compute the differences and understand prediction
 
 The original project schedule is also available:
 
@@ -332,17 +331,12 @@ The original project schedule is also available:
 > It is considered fundamental that the presentation of results should not serve as a treatise whose only purpose is to show that "a lot of work was done."  
 > What is expected from this section is that it **presents and discusses** only the most **relevant results**, highlighting the **strengths and/or limitations** of the methodology, emphasizing aspects of **performance**, and containing content that can be classified as **organized, didactic, and reproducible sharing of knowledge relevant to the community**.
 
-### Experiment 1: Exploratory Data Analysis
 
-The first experiment focused on understanding the NIH Chest X-ray metadata and selecting a reliable binary problem. The analysis showed that pneumonia-only samples are rare compared with healthy samples, with 322 pneumonia-only images and 60,353 healthy images after cleaning. This confirms that class imbalance is a central challenge for the project.
+### Experiment 1: Classifier Baseline
 
-The decision to use only pneumonia-only images avoids cases where the model might learn other co-occurring diseases instead of pneumonia. This choice makes the task cleaner, but also reduces the number of positive examples, increasing the need for augmentation and careful evaluation.
+> Falar da baseline
 
-### Experiment 2: Classifier Baseline
-
-
-
-### Experiment 3: CVAE Training
+### Experiment 2: CVAE Training
 
 A CVAE was trained using PyTorch with:
 
@@ -351,25 +345,54 @@ A CVAE was trained using PyTorch with:
 - Latent dimension: 64.
 - Conditions: binary disease label, normalized age, and gender embedding.
 - Optimizer: Adam.
-- Learning rate: `1e-4`.
+- Learning rate: `3e-4`.
 - Batch size: 64.
-- KL weight: beta = `0.01`.
+- KL weight: beta = `0.02`.
 - Checkpoints saved every 10 epochs.
 
-The reconstruction files show that the training loop is functioning and that the model learns a compressed representation of the input images. However, because no final quantitative image-quality metrics are stored yet, the current results should be interpreted as partial and qualitative.
+The training was run for 300 epochs, with the final checkpoint saved at epoch 299. The final notebook output reports:
+
+| Metric | Epoch 0 | Epoch 299 |
+|---|---:|---:|
+| Total Training loss | 0.046 | 0.012 |
+| Training reconstruction loss | 0.040 | 0.012 |
+| Total Validation loss | 0.036 | 0.014 |
+| Validation reconstruction loss | 0.030 | 0.014 |
+| Training KL divergence | 43.155 | 609.191 |
+| Validation KL divergence | 46.102 | 611.220 |
+
+The reconstruction loss decreased throughout training and stabilized near the end, indicating that the CVAE learned to reconstruct the overall structure of the chest X-ray images. The validation loss remained close to the training loss, suggesting limited overfitting in this experiment. The KL divergence increased during training, which is expected as the latent space becomes more informative and captures more variation in the data. Since the KL term is weighted by the β parameter, the total loss remains primarily influenced by the reconstruction term.
 
 Example reconstruction outputs:
 
 ![CVAE reconstruction epoch 0](training-results/cvae/results/reconstruction_0.png)
 
-![CVAE reconstruction epoch 140](training-results/cvae/results/reconstruction_140.png)
+![CVAE reconstruction epoch 299](training-results/cvae/results/reconstruction_299.png)
 
-### Experiment 4: CycleGAN Training
+After training, the notebook generated counterfactuals for the complete test set by flipping the input class condition. In total, **9,425 original images** and **9,425 counterfactual images** were evaluated. The counterfactual evaluation produced the following results:
 
+| Metric | Value |
+|---|---:|
+| Number of SSIM pairs | 9,425 |
+| Mean SSIM | 0.8190 |
+| SSIM standard deviation | 0.0503 |
+| Minimum SSIM | 0.3929 |
+| Maximum SSIM | 0.9544 |
+| Number of counterfactual images | 9,425 |
+| Number of reference images | 9,425 |
+| FID | 136.5358 |
+
+The mean SSIM of 0.8190 indicates that the generated counterfactuals preserved most of the original image structure, which is important since counterfactual explanations should mainly modify disease-related regions while maintaining anatomical consistency. However, the minimum SSIM value of 0.3929 indicates that some generated samples differed substantially from the original images and may require individual inspection.
+
+The FID score of 136.5358 indicates a noticeable distributional difference between the generated counterfactuals and the reference images. This is consistent with a common limitation of VAE-based image generation, where reconstructed images preserve global anatomy but may appear smoother or less realistic than real chest X-rays. Overall, the CVAE provides a useful baseline for counterfactual generation, although further refinement or comparison with models such as CycleGAN may improve image realism.
+
+### Experiment 3: CycleGAN Training
+
+> Falar do CycleGAN
 
 ### Discussion
 
-
+> Discutir comparando os modelos e os resultados
 
 ## Conclusion
 
@@ -377,6 +400,8 @@ Example reconstruction outputs:
 > In the intermediate project submission (**D2**), it may contain information about which steps or how the project will be conducted until its completion.  
 
 ## Ethical considerations
+
+> Adicionar mais sobre as considerações éticas
 
 Although counterfactual medical image generation offers promising opportunities for explainability and data augmentation, it also raises important ethical concerns. Generative models may amplify demographic biases, hallucinate clinically invalid findings, or unintentionally alter sensitive attributes such as age and sex. Additionally, synthetic medical data may still contain privacy risks due to memorization effects. Therefore, careful evaluation of fairness, realism, and clinical plausibility is essential before deployment in healthcare settings.
 
