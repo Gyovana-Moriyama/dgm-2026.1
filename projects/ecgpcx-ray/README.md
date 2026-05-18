@@ -175,7 +175,7 @@ The problem is formulated as a **domain translation task** rather than unconditi
 
 Two generative approached are being explored:
 
-##### 1.1 Conditional Variational Autoencoder (CVAE) [11]
+#### 1.1 Conditional Variational Autoencoder (CVAE) [11]
 
 The CVAE models the conditional distribution:
 
@@ -256,7 +256,7 @@ It is normalized by the batch size so that its scale is more comparable across b
 - The strong class imbalance can bias generated images toward healthy-looking reconstructions.
 - The generated counterfactuals still require quantitative and explainability evaluation.
 
-##### 1.2 Cycle-Consistent GAN (CycleGAN)
+#### 1.2 Cycle-Consistent GAN (CycleGAN)
 
 > Explicar o que foi implementado no CycleGAN
 
