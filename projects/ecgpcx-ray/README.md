@@ -204,6 +204,45 @@ Two CVAE variants exist in the repository:
 
 The CNN-based CVAE uses four convolutional blocks in the encoder and four transposed-convolution blocks in the decoder. The latent dimension is 64, the image input has one channel, and metadata conditioning includes normalized age and a learned gender embedding.
 
+**Training objective and loss**
+
+The CVAE model outputs:
+
+* the reconstructed image $\hat{x}$,
+* the latent mean $\mu$,
+* and the latent log-variance $\log\sigma^2$.
+
+During training, the model minimizes a loss composed of:
+
+1. a reconstruction loss, which measures how similar the reconstructed image is to the original image;
+2. a KL-divergence term, which regularizes the latent space.
+
+The total loss is defined as:
+
+$$
+\mathcal{L}_{CVAE} =
+\mathcal{L}_{rec}(x, \hat{x}) + \beta , D_{KL}
+$$
+
+The reconstruction loss combines MSE and L1 loss:
+
+$$
+\mathcal{L}_{rec}(x, \hat{x}) =
+0.5 \cdot \text{MSE}(x, \hat{x}) +
+0.5 \cdot \text{L1}(x, \hat{x})
+$$
+This combination was chosen because MSE penalizes larger pixel-level errors, while L1 helps preserve sharper intensity differences and is less sensitive to outliers. Since chest X-rays are grayscale images normalized to `[0, 1]`, both terms are computed directly on flattened image tensors.
+
+The KL-divergence term is computed from \(\mu\) and \(\log\sigma^2\):
+
+$$
+D_{KL} =
+-\frac{1}{2}
+\sum (1 + \log\sigma^2 - \mu^2 - \sigma^2)
+$$
+
+It is normalized by the batch size so that its scale is more comparable across batches. In this implementation, the KL term is weighted by $\beta = 0.02$, so the model focuses more on reconstruction quality while still maintaining a structured latent space. This is useful for counterfactual generation because it helps preserve the overall anatomy of the chest X-ray while allowing disease-related changes to be generated.
+
 **Advantages**
 
 - Stable training compared with adversarial models.
