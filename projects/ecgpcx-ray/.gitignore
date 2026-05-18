@@ -1,6 +1,9 @@
 # Data
 /data/
 
+/models/CycleGAN/checkpoints
+/models/CycleGAN/outputs/progress
+
 # Mac OS-specific storage files
 .DS_Store
 
