@@ -14,6 +14,8 @@ Usage:
 """
 
 import argparse
+import json
+import datetime
 import sys
 from pathlib import Path
 
@@ -234,6 +236,11 @@ def parse_args():
         "--device", default="cuda" if torch.cuda.is_available() else "cpu",
         help="Device to use — 'cuda' or 'cpu' (default: cuda if available)."
     )
+    parser.add_argument(
+        "--output", default=None,
+        help="Path to save results as JSON. "
+             "Defaults to <checkpoint_stem>_fid.json next to the checkpoint."
+    )
     return parser.parse_args()
 
 
@@ -320,13 +327,42 @@ def main():
     # ------------------------------------------------------------------
     # Report
     # ------------------------------------------------------------------
+    mean_fid = (fid_H2P + fid_P2H) / 2
+
     print("\n" + "=" * 50)
     print("FID Results")
     print("=" * 50)
     print(f"  H→P  (real pneumonia  vs fake pneumonia) : {fid_H2P:.4f}")
     print(f"  P→H  (real healthy    vs fake healthy)   : {fid_P2H:.4f}")
-    print(f"  Mean FID                                 : {(fid_H2P + fid_P2H) / 2:.4f}")
+    print(f"  Mean FID                                 : {mean_fid:.4f}")
     print("=" * 50)
+
+    # ------------------------------------------------------------------
+    # Save results to JSON
+    # ------------------------------------------------------------------
+    output_path = Path(args.output) if args.output else (
+        Path(args.checkpoint).with_name(Path(args.checkpoint).stem + "_fid.json")
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    results = {
+        "fid_H2P": round(fid_H2P, 6),
+        "fid_P2H": round(fid_P2H, 6),
+        "mean_fid": round(mean_fid, 6),
+        "checkpoint": str(args.checkpoint),
+        "epoch": ckpt.get("epoch"),
+        "healthy_dir": str(args.healthy_dir),
+        "pneumonia_dir": str(args.pneumonia_dir),
+        "n_healthy": len(healthy_ds),
+        "n_pneumonia": len(pneumonia_ds),
+        "image_size": args.image_size,
+        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+
+    with open(output_path, "w") as f:
+        json.dump(results, f, indent=2)
+
+    print(f"\nResults saved to: {output_path}")
 
     return {"fid_H2P": fid_H2P, "fid_P2H": fid_P2H}
 
