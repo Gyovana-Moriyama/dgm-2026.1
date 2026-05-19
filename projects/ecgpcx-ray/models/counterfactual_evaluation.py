@@ -7,7 +7,11 @@ from typing import Iterable
 
 import numpy as np
 import torch
+import matplotlib.cm as mplcm
+import matplotlib.pyplot as plt
 from PIL import Image
+from PIL import ImageFilter
+from matplotlib.gridspec import GridSpec
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.ssim import StructuralSimilarityIndexMeasure
 from torch.utils.data import DataLoader, Dataset
@@ -19,6 +23,17 @@ IMAGE_EXTENSIONS = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff"}
 INDEX_PATTERN = re.compile(r"img_(\d+)_")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS_DIR = REPO_ROOT / "training-results" / "cvae" / "results"
+
+INPUT_COLOR = "#2c7bb6"
+GEN_COLOR = "#d7191c"
+HEAT_COLOR = "#4dac26"
+
+ROW_LABELS = [
+    ("Healthy\n-> Pneumonia", INPUT_COLOR),
+    ("Pneumonia\n-> Healthy", GEN_COLOR),
+]
+COL_TITLES = ["Input (Real)", "Generated", "Change Heatmap"]
+COL_COLORS = [INPUT_COLOR, GEN_COLOR, HEAT_COLOR]
 
 
 @dataclass
@@ -91,6 +106,267 @@ def load_grayscale_tensor(path: Path) -> torch.Tensor:
     image = Image.open(path).convert("L")
     array = np.asarray(image, dtype=np.float32) / 255.0
     return torch.from_numpy(array).unsqueeze(0).unsqueeze(0)
+
+
+def load_grayscale_array(path: Path) -> np.ndarray:
+    image = Image.open(path).convert("L")
+    return np.asarray(image, dtype=np.float32) / 255.0
+
+
+def label_to_class_index(label) -> int:
+    label = torch.as_tensor(label).detach().cpu()
+    if label.ndim == 0 or label.numel() == 1:
+        return int(label.item())
+    return int(torch.argmax(label).item())
+
+
+def chunked(items: list, size: int):
+    """Yield complete non-overlapping chunks of size."""
+    for start in range(0, len(items) - size + 1, size):
+        yield items[start : start + size]
+
+
+def chunked_with_reuse(items: list[int], size: int, n_batches: int) -> list[list[int]]:
+    """Create fixed-size chunks, reusing from the start only when a class runs out."""
+    if not items:
+        return []
+
+    chunks = []
+    for batch_idx in range(n_batches):
+        chunk = []
+        for offset in range(size):
+            item_idx = batch_idx * size + offset
+            chunk.append(items[item_idx] if item_idx < len(items) else items[item_idx % len(items)])
+        chunks.append(chunk)
+    return chunks
+
+
+def make_change_heatmap_overlay(
+    real: np.ndarray,
+    generated: np.ndarray,
+    colormap: str = "hot",
+    overlay_alpha: float = 0.55,
+    blur_sigma: float = 2.0,
+) -> np.ndarray:
+    """Overlay smoothed |real - generated| on the real grayscale image."""
+    if real.shape != generated.shape:
+        raise ValueError(
+            "Images must have the same shape for heatmap visualization: "
+            f"{real.shape} != {generated.shape}"
+        )
+
+    diff = np.abs(real - generated)
+    if blur_sigma > 0:
+        diff_img = Image.fromarray((diff * 255).astype(np.uint8), mode="L")
+        diff = (
+            np.asarray(
+                diff_img.filter(ImageFilter.GaussianBlur(blur_sigma)),
+                dtype=np.float32,
+            )
+            / 255.0
+        )
+
+    diff_norm = diff / (diff.max() + 1e-8)
+    heatmap_rgb = mplcm.get_cmap(colormap)(diff_norm)[..., :3]
+    real_rgb = np.stack([real, real, real], axis=-1)
+    return np.clip((1.0 - overlay_alpha) * real_rgb + overlay_alpha * heatmap_rgb, 0, 1)
+
+
+def style_heatmap_axis(ax, spine_color: str, linewidth: float = 2.0) -> None:
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_edgecolor(spine_color)
+        spine.set_linewidth(linewidth)
+
+
+def image_paths_for_index(
+    image_idx: int,
+    original_dir: Path,
+    counterfactual_dir: Path,
+) -> tuple[Path, Path]:
+    index = f"{image_idx:06d}"
+    original_path = original_dir / f"img_{index}_original.png"
+    counterfactual_path = counterfactual_dir / f"img_{index}_counterfactual.png"
+    if not original_path.exists():
+        raise FileNotFoundError(f"Missing original image: {original_path}")
+    if not counterfactual_path.exists():
+        raise FileNotFoundError(f"Missing counterfactual image: {counterfactual_path}")
+    return original_path, counterfactual_path
+
+
+def render_cvae_change_heatmap_batch(
+    healthy_indices: list[int],
+    pneumonia_indices: list[int],
+    original_dir: Path,
+    counterfactual_dir: Path,
+    save_path: Path,
+    batch_idx: int,
+    n_batches: int,
+    colormap: str = "hot",
+    overlay_alpha: float = 0.55,
+    blur_sigma: float = 2.0,
+) -> None:
+    rows = [
+        (healthy_indices, ROW_LABELS[0]),
+        (pneumonia_indices, ROW_LABELS[1]),
+    ]
+    samples_per_class = len(healthy_indices)
+    n_img_cols = 3 * samples_per_class
+
+    fig = plt.figure(figsize=(3.0 * n_img_cols + 0.6, 7.2))
+    gs = GridSpec(
+        nrows=2,
+        ncols=n_img_cols + 1,
+        figure=fig,
+        width_ratios=[1.0] * n_img_cols + [0.05],
+        wspace=0.05,
+        hspace=0.18,
+        left=0.10,
+        right=0.96,
+        top=0.86,
+        bottom=0.05,
+    )
+
+    axes = np.array(
+        [[fig.add_subplot(gs[row, col]) for col in range(n_img_cols)] for row in range(2)]
+    )
+    cbar_ax = fig.add_subplot(gs[:, -1])
+
+    for sample_idx in range(samples_per_class):
+        for col_offset, (title, color) in enumerate(zip(COL_TITLES, COL_COLORS)):
+            axes[0, 3 * sample_idx + col_offset].set_title(
+                title,
+                fontsize=9,
+                fontweight="bold",
+                color=color,
+                pad=5,
+            )
+
+    for row_idx, (indices, (row_label, row_color)) in enumerate(rows):
+        for sample_idx, image_idx in enumerate(indices):
+            original_path, counterfactual_path = image_paths_for_index(
+                image_idx,
+                original_dir,
+                counterfactual_dir,
+            )
+            real = load_grayscale_array(original_path)
+            generated = load_grayscale_array(counterfactual_path)
+            overlay = make_change_heatmap_overlay(
+                real,
+                generated,
+                colormap=colormap,
+                overlay_alpha=overlay_alpha,
+                blur_sigma=blur_sigma,
+            )
+
+            col = 3 * sample_idx
+            axes[row_idx, col].imshow(real, cmap="gray", vmin=0, vmax=1)
+            axes[row_idx, col + 1].imshow(generated, cmap="gray", vmin=0, vmax=1)
+            axes[row_idx, col + 2].imshow(overlay)
+
+            style_heatmap_axis(axes[row_idx, col], INPUT_COLOR)
+            style_heatmap_axis(axes[row_idx, col + 1], GEN_COLOR)
+            style_heatmap_axis(axes[row_idx, col + 2], HEAT_COLOR)
+
+            axes[row_idx, col].set_xlabel(f"idx {image_idx:06d}", fontsize=8)
+
+        axes[row_idx, 0].set_ylabel(
+            row_label,
+            fontsize=11,
+            fontweight="bold",
+            color=row_color,
+            labelpad=10,
+            rotation=90,
+            va="center",
+        )
+
+    scalar_mappable = plt.cm.ScalarMappable(
+        cmap=mplcm.get_cmap(colormap),
+        norm=plt.Normalize(vmin=0, vmax=1),
+    )
+    scalar_mappable.set_array([])
+    cbar = fig.colorbar(scalar_mappable, cax=cbar_ax)
+    cbar.set_label("Normalized |pixel change|", fontsize=9, labelpad=6)
+    cbar.ax.tick_params(labelsize=8)
+
+    fig.suptitle(
+        f"CVAE Change Heatmaps [{batch_idx + 1}/{n_batches}]",
+        fontsize=13,
+        fontweight="bold",
+        y=0.95,
+    )
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, bbox_inches="tight", dpi=150)
+    plt.close(fig)
+
+
+def save_cvae_change_heatmap_sweep(
+    test_dataset,
+    original_dir: Path | str = DEFAULT_RESULTS_DIR / "original",
+    counterfactual_dir: Path | str = DEFAULT_RESULTS_DIR / "counterfactuals",
+    output_dir: Path | str = DEFAULT_RESULTS_DIR / "change_heatmaps",
+    samples_per_class: int = 2,
+    colormap: str = "hot",
+    overlay_alpha: float = 0.55,
+    blur_sigma: float = 2.0,
+) -> list[Path]:
+    """Save CVAE change heatmaps for the full test set.
+
+    Each PNG contains two rows. The first row shows healthy originals and their
+    generated pneumonia counterfactuals. The second row shows pneumonia originals
+    and their generated healthy counterfactuals. Images are grouped in complete
+    batches of `samples_per_class` from each source class.
+    """
+    original_dir = Path(original_dir)
+    counterfactual_dir = Path(counterfactual_dir)
+    output_dir = Path(output_dir)
+
+    labels = [label_to_class_index(label) for label in test_dataset.labels]
+    healthy_indices = [idx for idx, label in enumerate(labels) if label == 0]
+    pneumonia_indices = [idx for idx, label in enumerate(labels) if label == 1]
+
+    n_healthy_batches = int(np.ceil(len(healthy_indices) / samples_per_class))
+    n_pneumonia_batches = int(np.ceil(len(pneumonia_indices) / samples_per_class))
+    n_batches = max(n_healthy_batches, n_pneumonia_batches)
+
+    if not healthy_indices or not pneumonia_indices:
+        raise ValueError(
+            "Both classes are required to create CVAE change heatmap batches. "
+            f"Found {len(healthy_indices)} healthy and {len(pneumonia_indices)} pneumonia samples."
+        )
+
+    healthy_batches = chunked_with_reuse(healthy_indices, samples_per_class, n_batches)
+    pneumonia_batches = chunked_with_reuse(pneumonia_indices, samples_per_class, n_batches)
+
+    saved_paths = []
+    for batch_idx in tqdm(range(n_batches), desc="Saving CVAE change heatmaps"):
+        save_path = output_dir / f"cvae_change_heatmap_{batch_idx + 1:03d}.png"
+        render_cvae_change_heatmap_batch(
+            healthy_batches[batch_idx],
+            pneumonia_batches[batch_idx],
+            original_dir,
+            counterfactual_dir,
+            save_path,
+            batch_idx,
+            n_batches,
+            colormap=colormap,
+            overlay_alpha=overlay_alpha,
+            blur_sigma=blur_sigma,
+        )
+        saved_paths.append(save_path)
+
+    reused_healthy = max(0, n_batches * samples_per_class - len(healthy_indices))
+    reused_pneumonia = max(0, n_batches * samples_per_class - len(pneumonia_indices))
+    print(f"Saved {len(saved_paths)} CVAE change heatmap PNGs to: {output_dir}")
+    if reused_healthy or reused_pneumonia:
+        print(
+            "Reused samples to fill fixed-size rows: "
+            f"{reused_healthy} healthy, {reused_pneumonia} pneumonia"
+        )
+
+    return saved_paths
 
 
 def compute_paired_ssim(pairs: Iterable[tuple[Path, Path]], device) -> list[dict[str, object]]:
