@@ -1,258 +1,152 @@
-# Geração de Contrafactuais Explicáveis para Pneumonia em Imagens de Raio-X de Tórax
+## Experiments, Results, and Discussion of Results
 
-# Explainable Counterfactual Generation for Pneumonia in Chest X-ray Images
+### 1. CycleGAN Method Description
 
----
+CycleGAN (Cycle-Consistent Generative Adversarial Network) is an unpaired image-to-image translation framework introduced by Zhu et al. (2017). It learns bidirectional mappings between two image domains without requiring paired training examples. In this project, **healthy chest X-rays** (domain H) and **pneumonia chest X-rays** (domain P). 
 
-## Presentation
+The framework comprises four networks trained simultaneously:
 
-This project originated in the context of the graduate course _IA376N - Generative AI: from models to multimodal applications_,
-offered in the first semester of 2026, at Unicamp, under the supervision of Prof. Dr. Paula Dornhofer Paro Costa, from the Department of Computer and Automation Engineering (DCA) of the School of Electrical and Computer Engineering (FEEC).
+- **G_H2P**: Generator that translates Healthy → Pneumonia  
+- **G_P2H**: Generator that translates Pneumonia → Healthy  
+- **D_H**: Discriminator for the Healthy domain  
+- **D_P**: Discriminator for the Pneumonia domain  
 
-| Name | RA | Specialization |
-|--|--|--|
-| Maria Fernanda Bosco | 183544 | Statistics |
-| Gabriel Carvalho Freitas | 155421 | Statistics |
-| Gyovana Mayara Moriyama | 216190 | Computer Science |
-
----
-
-## Project Summary Description
-
-Deep learning models for medical imaging are often limited by data scarcity and class imbalance, especially for pathological cases such as pneumonia in chest X-rays.
-
-The analysis of chest X-ray images for pneumonia detection is a critical yet challenging task in clinical practice. While deep learning models have demonstrated strong performance in medical image classification, they often lack interpretability and rely on limited labeled datasets.
-
-This project proposes a **generative framework for explainable data augmentation and interpretation** using **counterfactual image generation**.
-
-Instead of generating images from noise, the problem is formulated as a **domain translation task** between:
-
-- **Healthy chest X-rays**
-- **Pneumonia chest X-rays**
-
-The central idea is to generate *counterfactual images*, answering questions such as:
-
-- *What would a healthy patient look like if they had pneumonia?*
-- *What image regions are modified to represent pneumonia?*
-
-These counterfactuals serve two purposes:
-
-1. **Data Augmentation**: generating synthetic pneumonia images to improve classifier performance  
-2. **Explainability**: highlighting clinically relevant regions associated with the disease  
-
-The difference between original and generated images provides a **visual and interpretable explanation**, aligning with the paradigm of **Explainable AI (XAI)** in medical imaging.
-
-### Outputs of the model:
-- Synthetic pneumonia chest X-ray images
-- Counterfactual difference maps highlighting pathological regions
-- Augmented datasets for downstream classification tasks
-
----
-
-## Proposed Methodology
-
-### 1. Datasets
-
-The project will use publicly available **chest X-ray datasets** containing labeled examples of healthy and pneumonia cases.
-
-Possible datasets include:
-
-- NIH Chest X-ray Dataset
-- RSNA Pneumonia Detection Challenge
-
-The dataset will be divided into:
-
-- Training set  
-- Validation set  
-- Test set  
-
-These datasets provide sufficient variability and real clinical patterns for learning the transformation between healthy and pathological domains.
-
----
-
-### 2. Generative Models
-
-The problem is formulated as a **domain translation task** rather than unconditional generation.
-
-Two generative approaches will be explored:
-
-#### 2.1 Conditional Variational Autoencoder (CVAE)
-
-The CVAE models the conditional distribution:
+The total generator loss combines three components:
 
 $$
-p(x \mid z, y)
+\mathcal{L}_G = \mathcal{L}_{\text{GAN}} + \lambda_{\text{cycle}} \cdot \mathcal{L}_{\text{cycle}} + \lambda_{\text{identity}} \cdot \mathcal{L}_{\text{identity}}
 $$
 
-Where:
+- **GAN loss** (LSGAN / MSE-based): encourages generators to produce images indistinguishable from the target domain.  
+- **Cycle consistency loss** (L1): enforces that translating an image to the other domain and back recovers the original — $G_{P2H}(G_{H2P}(x_H)) \approx x_H$ and vice versa. This is the key constraint that preserves anatomical structure.  
+- **Identity loss** (L1): regularizes each generator when fed images already in the target domain, helping preserve color and texture properties.
 
-- \(x\): image  
-- \(z\): latent representation  
-- \(y\): condition (healthy or pneumonia)  
-
-Counterfactual generation is performed by:
-
-1. Encoding an image into latent space  
-2. Changing the condition label  
-3. Decoding into a new image  
-
-This enables generation of **controlled counterfactuals**.
-
-**Capabilities:**
-- Generate counterfactuals by changing y
-- Preserve anatomical structure
-
-**Advantages:**
-- Stable training
-- Interpretable latent space
-- Natural support for counterfactual explanations
+Each discriminator uses a **70×70 PatchGAN** architecture, which classifies overlapping image patches as real or fake rather than the whole image, encouraging high-frequency sharpness.
 
 ---
 
-#### 2.2 Cycle-Consistent GAN (CycleGAN)
+### 3. Training Configuration
 
-CycleGan learns bidirectional mappings:
-  - Healthy → Pneumonia  
-  - Pneumonia → Healthy  
-
-It enforces **cycle consistency**, preserving anatomical structure while modifying pathology.
-
-**Advantages:**
-- Works with unpaired data
-- Produces sharper and more realistic images
-
-**Challenges:**
-- Training instability
-- Risk of unrealistic artifacts
-
----
-
-### 3. Classification Models
-
-A classification model is a central component of this project, as it provides the basis for evaluating both data augmentation and explainability through counterfactuals.
-
-The classifier is trained to perform a binary classification task:
-
-- Input: Chest X-ray image
-- Output: Pneumonia vs. Healthy
-
-This model serves two main purposes:
-
-- Performance Benchmark
-
-  - Evaluate whether synthetic data improves classification performance
-
-- Explainability Anchor
-  - Counterfactual explanations are defined with respect to this model
-  - A valid counterfactual should change the classifier’s prediction
-Model Architecture
-
-We will adopt a convolutional neural network (CNN)-based architecture. Depending on feasibility, we consider:
-
-- A simple custom CNN (baseline)
-- A pretrained model such as ResNet-18 or ResNet-34 (fine-tuned)
-
----
-
-### 4. Explainability Strategy
-
-A central contribution of this project is the use of **counterfactual explanations**.
-
-Given:
-
-- $x_h$: healthy image  
-- $x_p$: generated pneumonia image  
-
-We compute:
-
-$$
-\Delta x = x_p - x_h
-$$
-
-This highlights:
-- Regions modified by the model
-- Potential pathological features
-- Visual representation of what constitutes pneumonia
-
-This provides an **interpretable and clinically meaningful explanation** of model behavior.
-
-Additionally:
-- Grad-CAM will be used for comparison
-- Evaluate interpretability before/after augmentation
-
----
-
-### 5. Tools
-
-| Tool | Purpose |
+| Hyperparameter | Value |
 |---|---|
-| PyTorch | Deep learning framework |
-| torchvision | Image preprocessing |
-| CVAE / CycleGAN implementations | Generative modeling |
-| NumPy, OpenCV | Data manipulation |
-| Matplotlib | Visualization |
-| Grad-CAM | Auxiliary explainability |
-| Scikit-learn | Evaluation metrics |
+| Image size | 128 × 128 |
+| Batch size | 4 |
+| Epochs | 200 |
+| Learning rate | 2 × 10⁻⁴ |
+| Optimizer | Adam (β₁ = 0.5, β₂ = 0.999) |
+| λ_cycle | 10.0 |
+| λ_identity | 5.0 |
+| Generator residual blocks | 6 |
+| Image replay buffer size | 50 |
+| Device | CUDA |
+
+**Generator architecture** — ResNet-based encoder-decoder:
+1. Initial 7×7 convolution → 64 feature maps  
+2. Two strided downsampling convolutions (64 → 128 → 256)  
+3. Six residual blocks at 256 channels  
+4. Two transposed convolutions for upsampling (256 → 128 → 64)  
+5. Final 7×7 convolution + Tanh output  
+All intermediate layers use InstanceNorm2d.
+
+**Discriminator architecture** — 70×70 PatchGAN: four convolutional layers (C64 → C128 → C256 → C512) with LeakyReLU (slope 0.2) and InstanceNorm2d, followed by a single-channel output map.
+
+**Training data augmentation** (train split only):
+- Random horizontal flip (p = 0.5)  
+- Random rotation (±5°)  
+- Random affine: translation ±2%, scale 0.98–1.02  
+- Pixel normalization: mean = 0.5, std = 0.5 (mapping to [−1, 1])  
+
+**Discriminator stabilization**: a replay buffer of size 50 was used for both fake-healthy and fake-pneumonia images, following the original CycleGAN paper. Discriminator loss was scaled by 0.5.
+
+**Validation**: at the end of each epoch, the cycle consistency loss is evaluated on the validation set using both generators in evaluation mode.
 
 ---
 
-### 6. Evaluation
+### 4. Training
 
-The evaluation will consider three aspects:
+#### Baseline CycleGAN (128 × 128, 6 residual blocks)
 
-#### 6.1 Classification Performance:
-- Accuracy  
-- ROC-AUC  
+The training run used the configuration described above as a baseline. The main goals were to:
 
-#### 6.2 Image Generation Quality:
-- SSIM (Structural Similarity Index)  
-- FID (Fréchet Inception Distance)
+1. Verify training stability (no mode collapse or vanishing gradients in generator/discriminator losses)  
+2. Qualitatively inspect whether the generated images are visually coherent chest X-rays  
+3. Assess cycle consistency (whether the reconstructed images recover the input)  
 
-#### 6.3 Explainability:
-- Visual inspection of counterfactual differences  
-- Comparison with Grad-CAM heatmaps  
-- Classifier Consistency (predict with pneumonia vs. without)
+Loss curves (generator total loss, discriminator losses, cycle loss, identity loss, and validation cycle loss) were tracked across all 200 epochs and saved as `outputs/losses/loss_curve.png`. Side-by-side grids of real, translated, and reconstructed images were saved every epoch to `outputs/progress/`.
 
 ---
 
-### 7. Expected Results
+### 5. Results
 
-The project expects to produce:
+#### 5.1 Training Loss Behavior
 
-1. A generative model capable of translating:
-   - Healthy → Pneumonia  
-   - Pneumonia → Healthy  
+![CycleGAN Training Loss Curves](models/CycleGAN/outputs/losses/loss_curve.png)
 
-2. Synthetic medical images for data augmentation  
+Training ran for 200 epochs on the NIH Chest X-ray training split. All losses are plotted on a logarithmic scale.
 
-3. Improved pneumonia classification performance using augmented data  
+The **generator total loss (G_loss)** started high (~5) and decreased steeply during the first ~50 epochs, then continued to decrease slowly, stabilizing around 2.0–2.3 by the end of training, with no signs of mode collapse. The **cycle consistency loss** dropped sharply from ~4 in the first 30 epochs down to approximately 0.8–1.0 by epoch 200, indicating that the generators progressively learned to preserve the anatomical structure of the input image after the round-trip translation. The **identity loss** decreased from ~0.8 to ~0.4, confirming that each generator applies minimal unnecessary changes when given an image already in its target domain. The **discriminator losses (D_H, D_P)** both stabilized around 0.15–0.20 throughout training, indicating that the discriminators remained consistently capable of distinguishing real from generated images. The **validation cycle loss** is noisy due to the small validation set, but closely tracks the training cycle loss, suggesting no overfitting to the training domain.
 
-4. Counterfactual explanations highlighting disease-relevant regions  
+The most notable behavior is the monotonic upward trend of the GAN loss throughout training. Tha GAN loss is the average of `MSELoss(D_P(G_H2P(real_healthy)), 1)` and `MSELoss(D_H(G_P2H(real_pneumonia)), 1)`. Each term measures how far the discriminator's score on a fake image is from 1. For this loss to increase, the discriminators must be scoring fake images progressively lower — meaning they are getting better at detecting generated images over time, and the generators are not catching up.
 
-5. Qualitative analysis demonstrating alignment between generated changes and clinical patterns  
+The total generator loss is composed of the GAN term (unscaled, weight 1), the cycle consistency term (scaled by λ_cycle = 10), and the identity term (scaled by λ_identity = 5). In the early epochs, the cycle and identity terms are large and dominate the generator gradient by roughly 8×, so the generators invest almost all of their capacity in learning structural consistency. The discriminators, optimized in a completely separate step, improve undisturbed throughout this period. By the time cycle and identity losses shrink enough for the GAN gradient to matter proportionally, the discriminators have already built a persistent advantage that the generators never fully recover from. In a healthy adversarial training regime, the GAN loss should oscillate around a roughly stable value as generators and discriminators alternate between gaining and losing the upper hand. For future tests, a different set of parameters will be conducted to check if this pattern changes.
+
+#### 5.2 Visual Quality of Generated Images
+
+**Counterfactual image generation examples**
+
+![CycleGAN Generation Examples](models/CycleGAN/outputs/img_generation/generation_examples.png)
+
+The figure above shows 4 example pairs for each translation direction, randomly sampled from the test set. Blue borders denote real (input) images; red borders denote generated (output) images.
+
+The generated images maintain the overall chest structure (rib cage, cardiac silhouette, diaphragm position) while introducing subtle changes for both of the translations. Overall, the generation was performed successfully at 128 × 128 resolution. The generated images are visually coherent chest X-rays, though some cases show minor artifacts around the lung borders.
 
 ---
 
-## Schedule
+**Counterfactual change heatmaps**
 
-![Schedule](images/schedule.png)
+![CycleGAN Change Heatmap](models/CycleGAN/outputs/img_generation/change_heatmap.png)
+
+The heatmaps visualize the absolute per-pixel difference between the real and generated images, overlaid on the real image to preserve anatomical context. Brighter colors indicate larger pixel-level changes.
+
+The change heatmaps confirm that the model is not modifying images uniformly. This spatial specificity is an encouraging sign for the counterfactual explainability goal. The model appears to be encoding a representation of the disease rather than introducing arbitrary global texture changes.
+
+However, some heatmap cases show activity near the image borders and outside the lung fields, suggesting the model occasionally makes spurious peripheral changes. This may be a consequence of the small training set size or the 128 × 128 resolution limiting fine spatial encoding.
+
+#### 5.3 Quantitative Evaluation
+
+The primary quantitative metric for generation quality is the **Fréchet Inception Distance (FID)**, computed between:
+
+- Real pneumonia images vs. generated pneumonia images (G_H2P applied to the healthy test set)  
+- Real healthy images vs. generated healthy images (G_P2H applied to the pneumonia test set)  
+
+Lower FID indicates that the generated distribution is closer to the real distribution.
+
+FID was evaluated on the test set using the checkpoint from epoch 199:
+
+| Translation | Test images | FID |
+|---|---|---|
+| Healthy → Pneumonia (G_H2P) | 71 healthy images | 121.09 |
+| Pneumonia → Healthy (G_P2H) | 33 pneumonia images | 109.58 |
+| **Mean FID** | — | **115.34** |
+
+The FID scores are moderately high. Out test dataset is small, with only 33 pneumonia cases, which can be interfering the metric. The slightly better FID for the P→H direction may reflect that the healthy domain is larger and more varied, providing a richer target distribution. These scores serve as a baseline for comparison in future experiments.
 
 ---
 
-## Bibliographic References
+### 6. Discussion
 
-1. Kumar, Amar, et al. "Prism: High-resolution & precise counterfactual medical image generation using language-guided stable diffusion." arXiv preprint arXiv:2503.00196 (2025).
-2. Atad, Matan, et al. "Counterfactual explanations for medical image classification and regression using diffusion autoencoder." arXiv preprint arXiv:2408.01571 (2024).
-3. Hou, Junlin, et al. "Self-explainable ai for medical image analysis: A survey and new outlooks." arXiv preprint arXiv:2410.02331 (2024).
-4. Ahmed, Fahad et al. “Explainable artificial intelligence (XAI) in medical imaging: a systematic review of techniques, applications, and challenges.” BMC medical imaging vol. 26,1 37. 5 Jan. 2026, doi:10.1186/s12880-025-02118-w
-5. Chen, H., Gomez, C., Huang, CM. et al. Explainable medical imaging AI needs human-centered design: guidelines and evidence from a systematic review. npj Digit. Med. 5, 156 (2022). https://doi.org/10.1038/s41746-022-00699-2
-6. Mertes S, Huber T, Weitz K, Heimerl A and André E (2022) GANterfactual—Counterfactual Explanations for Medical Non-experts Using Generative Adversarial Learning. Front. Artif. Intell. 5:825565. doi: 10.3389/frai.2022.825565
-7. Zia, Tehseen, Zeeshan Nisar, and Shakeeb Murtaza. "Counterfactual Explanation and Instance-Generation using Cycle-Consistent Generative Adversarial Networks." arXiv preprint arXiv:2301.08939 (2023).
-8. Oakden-Rayner, L. Exploring the ChestXray14 dataset: problems. https://lukeoakdenrayner.wordpress.com/2017/12/18/the-chestxray14-dataset-problems/ (2017).
-9. Wang, X. et al. ChestX-ray8: Hospital-scale chest X-ray database and benchmarks on weakly-supervised classification and localization of common thorax diseases. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2097–2106, 10.1109/CVPR.2017.369 (2017).
-10. Siekiera, Julia, and Stefan Kramer. "Counterfactual Explanations in Medical Imaging: Exploring SPN-Guided Latent Space Manipulation." arXiv preprint arXiv:2507.19368 (2025).
----
+#### Observations
 
-## Presentation slides
+The choice of CycleGAN as the translation backbone was motivated by its ability to train on **unpaired data**, which is a realistic constraint in clinical settings where matched healthy/pneumonia images from the same patient are rarely available. The cycle consistency constraint is particularly well-suited to the counterfactual generation goal since it enforces that only disease-relevant features are modified, while preserving the underlying anatomy of the patient.
 
-[E1 presentation](https://docs.google.com/presentation/d/1P2AmFucKLHWtAzc0i90CsPv40hV0R9bwpwrL2EjBf7s/edit?usp=sharing)
+The use of a **128 × 128** resolution was a deliberate trade-off between image fidelity and computational cost. Chest X-rays at this resolution retain coarse pathological patterns (opacification, consolidation) while keeping training feasible.
+
+The **identity loss** was included to avoid unnecessary texture shifts when a generator receives an image already in its target domain, which is especially important for grayscale medical images where contrast changes could be mistaken for pathology.
+
+#### Limitations and Potential Directions
+
+- **Resolution**: 128 × 128 may be insufficient to capture fine-grained radiological features such as subtle consolidation boundaries. A follow-up experiment at 256 × 256 is planned if computational resources allow.
+- **Class imbalance**: We still have much more cases of healthy X-ray than Pneumonia, which might be affecting the performance of the generator, specially to learn H->P translaction. The unpaired setup partially mitigates this, but a more balanced set would strengthen the evaluation.
+- **FID as sole metric**: FID measures distributional similarity but not clinical relevance. Future work will complement it with a classifier-based counterfactual validity check — generated pneumonia images should flip a downstream classifier's prediction with high probability.
+- **Artifact reduction**: minor artifacts observed at lung borders in some generated images warrant investigation into whether longer training, higher resolution, or spectral normalization in the discriminator could reduce them.
+
