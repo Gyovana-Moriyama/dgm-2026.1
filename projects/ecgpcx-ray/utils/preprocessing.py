@@ -210,7 +210,9 @@ class Preprocessing():
         removes duplicates, and removes age outliers.
         """
         # Filter patients with the specified condition
-        pneumonia_only_df = self.metadata[self.metadata['Finding Labels'] == self.label]
+        # pneumonia_only_df = self.metadata[self.metadata['Finding Labels'] == self.label]
+        pneumonia_only_df = self.metadata[self.metadata['Finding Labels'].str.contains('Pneumonia')]
+
 
         if verbose:
             print('Pneumonia patient records:')
