@@ -1,0 +1,14 @@
+projects/ecgpcx-ray/utils/metrics.py
+  h_f11e96d8231d32 18-21,54,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "92f1f57b0ad613f50d67964e0718bfba71d83e2f",
+  "prompts": {},
+  "humans": {
+    "h_f11e96d8231d32": {
+      "author": "mfbosco <mariafernandabosco@outlook.com>"
+    }
+  }
+}
