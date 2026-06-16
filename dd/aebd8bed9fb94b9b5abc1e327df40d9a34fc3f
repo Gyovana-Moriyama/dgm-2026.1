@@ -1,0 +1,12 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "ddaebd8bed9fb94b9b5abc1e327df40d9a34fc3f",
+  "prompts": {},
+  "humans": {
+    "h_f11e96d8231d32": {
+      "author": "mfbosco <mariafernandabosco@outlook.com>"
+    }
+  }
+}
