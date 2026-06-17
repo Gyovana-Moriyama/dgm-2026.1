@@ -1,0 +1,24 @@
+projects/ecgpcx-ray/notebooks/3.0-compare-classifiers.ipynb
+  s_023d2e12ebad67::t_24c5190799cf5c 1-28,30-83,85-122,124-144,146-206,208-325,327-416,418-611,613-696,698-772,774-824,826-864,866-878,880-884
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0cae0170a5950e2a81bf8a7939462f5f42c2b9d2",
+  "prompts": {},
+  "humans": {
+    "h_f11e96d8231d32": {
+      "author": "mfbosco <mariafernandabosco@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_023d2e12ebad67": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "271f76f8-9063-4c55-9d78-8f905d8307df",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "mfbosco <mariafernandabosco@outlook.com>"
+    }
+  }
+}
